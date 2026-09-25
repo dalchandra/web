@@ -19,8 +19,8 @@ jobs:
         uses: google-github-actions/run-gemini-cli@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           prompt: |
             Review this pull request for code quality, security, and correctness.
             If the code meets all standards and introduces no breaking changes, use the `gh` CLI tool to approve and merge it automatically (e.g., `gh pr merge --merge --admin`). 
