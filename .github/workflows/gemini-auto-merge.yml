@@ -1,0 +1,27 @@
+name: Gemini PR Auto-Merge
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review-and-merge:
+    runs-on: ubuntu-latest
+    # Explicit permissions required for the bot to merge and comment
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Run Gemini PR Review
+        uses: google-github-actions/run-gemini-cli@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            Review this pull request for code quality, security, and correctness.
+            If the code meets all standards and introduces no breaking changes, use the `gh` CLI tool to approve and merge it automatically (e.g., `gh pr merge --merge --admin`). 
+            If it fails the review, leave a comment detailing the issues and DO NOT merge it.
