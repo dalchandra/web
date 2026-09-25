@@ -6,7 +6,6 @@ on:
 jobs:
   review-and-merge:
     runs-on: ubuntu-latest
-    # Explicit permissions required for the bot to merge and comment
     permissions:
       contents: write
       pull-requests: write
