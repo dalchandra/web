@@ -1,6 +1,7 @@
 name: Gemini PR Review and Merge
 
 on:
+  #pull_request_target:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
