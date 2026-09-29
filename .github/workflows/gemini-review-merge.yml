@@ -18,6 +18,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          allow-unsafe-pr-checkout: true # Explicitly allows checking out the fork
 
       - name: Set up Python
         uses: actions/setup-python@v5
