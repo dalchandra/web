@@ -36,6 +36,7 @@ jobs:
           REPO: ${{ github.repository }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
+          python - << 'EOF'
           import os
           import subprocess
           import json
