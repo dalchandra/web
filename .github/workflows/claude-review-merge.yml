@@ -1,0 +1,136 @@
+name: Anthropic PR Review and Merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  review-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          allow-unsafe-pr-checkout: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic requests
+
+      - name: Run Anthropic Review & Action
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python - << 'EOF'
+          import os
+          import subprocess
+          import json
+          import anthropic
+
+          pr_number = os.environ["PR_NUMBER"]
+          repo = os.environ["REPO"]
+          base_ref = os.environ["BASE_REF"]
+
+          # Fetch diff against base branch
+          subprocess.run(["git", "fetch", "origin", base_ref], check=True)
+          diff_cmd = subprocess.run(
+              ["git", "diff", f"origin/{base_ref}...HEAD"],
+              capture_output=True,
+              text=True,
+              check=True
+          )
+          diff_text = diff_cmd.stdout
+
+          if not diff_text.strip():
+              print("No diff detected.")
+              exit(0)
+
+          # Truncate diff if exceptionally large to avoid token ceiling
+          max_chars = 60000
+          if len(diff_text) > max_chars:
+              diff_text = diff_text[:max_chars] + "\n\n[Diff truncated due to size limits]"
+
+          client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+          prompt = f"""
+          You are an automated pull request reviewer. Analyze this code diff thoroughly.
+
+          Diff:
+          {diff_text}
+
+          Tasks:
+          1. Provide a concise technical review summarizing changes, potential bugs, style issues, or security flaws.
+          2. Decide whether to APPROVE or REQUEST_CHANGES.
+             - Only set verdict to "APPROVED" if the code has no breaking bugs, severe security vulnerabilities, or syntax issues.
+             - If any significant fixes are needed, set verdict to "REQUEST_CHANGES".
+
+          Return your response as ONLY raw JSON matching this schema, with no markdown formatting or extra text:
+          {{
+            "verdict": "APPROVED" | "REQUEST_CHANGES",
+            "summary": "Markdown string containing your review comments"
+          }}
+          """
+
+          response = client.messages.create(
+              model="claude-3-5-sonnet-20241022",
+              max_tokens=4096,
+              messages=[
+                  {"role": "user", "content": prompt}
+              ]
+          )
+
+          # Extract text and handle potential markdown block wrapping if Claude adds it
+          raw_text = response.content[0].text.strip()
+          if raw_text.startswith("```json"):
+              raw_text = raw_text.split("```json")[1].rsplit("```", 1)[0].strip()
+          elif raw_text.startswith("```"):
+              raw_text = raw_text.split("```")[1].rsplit("```", 1)[0].strip()
+
+          try:
+              result = json.loads(raw_text)
+          except json.JSONDecodeError as e:
+              print(f"Failed to parse JSON response: {raw_text}")
+              raise e
+
+          verdict = result.get("verdict", "REQUEST_CHANGES")
+          summary = result.get("summary", "No summary provided.")
+
+          review_body = f"### Claude Automated Review\n\n**Verdict:** `{verdict}`\n\n{summary}"
+
+          # Submit review via GitHub CLI
+          action = "APPROVE" if verdict == "APPROVED" else "REQUEST_CHANGES"
+          subprocess.run([
+              "gh", "pr", "review", pr_number,
+              "--repo", repo,
+              f"--{action.lower().replace('_', '-')}",
+              "--body", review_body
+          ], check=True)
+
+          # If approved, merge the pull request
+          if verdict == "APPROVED":
+              print("PR approved by Claude. Executing merge...")
+              subprocess.run([
+                  "gh", "pr", "merge", pr_number,
+                  "--repo", repo,
+                  "--squash",
+                  "--delete-branch",
+                  "--auto" 
+              ], check=True)
+          else:
+              print("PR requires changes. Skipping merge.")
+          EOF
