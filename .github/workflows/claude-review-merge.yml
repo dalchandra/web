@@ -96,7 +96,7 @@ jobs:
           """
 
           response = client.messages.create(
-              model="claude-opus-5-5",
+              model="claude-sonnet-5-5",
               max_tokens=16000,  # leave room for thinking + the JSON answer
               messages=[{"role": "user", "content": prompt}],
           )
