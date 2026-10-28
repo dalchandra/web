@@ -1,0 +1,80 @@
+# Reusable workflow: the actual review-and-merge logic, shared by every
+# agent's thin caller workflow (claude-review-merge.yml etc. in this same
+# directory) -- generalized from the real dalchandra/web repo's four
+# separate, near-duplicate *-review-merge.yml.bak files (confirmed by
+# reading each one directly) into one place, so there's exactly one copy
+# of the checkout/python-setup/review/merge steps to maintain instead of
+# four copies that silently drift apart (which is exactly what had
+# already happened: only Claude's original workflow had the
+# "diff is untrusted" framing; ../scripts/pr_review.py fixes that by
+# giving every agent the same set of system-prompt variants, see
+# ../system_prompts.json).
+#
+# Must live at .github/workflows/_pr-review-merge.yml in the target repo
+# for the `uses: ./.github/workflows/...` reference in the caller
+# workflows to resolve -- GitHub does not support calling a reusable
+# workflow from outside .github/workflows/. Deploy by copying this whole
+# workflows/ directory's contents into the target repo's
+# .github/workflows/, and scripts/pr_review.py + system_prompts.json
+# into .github/scripts/ (see ../README.md; orchestrate_github_pr.py's
+# --activate-agent automates this).
+name: _PR Review and Merge (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      provider:
+        required: true
+        type: string
+        description: "anthropic | gemini | openai | deepseek"
+      model:
+        required: true
+        type: string
+      pip_packages:
+        required: true
+        type: string
+        description: "space-separated pip packages this provider's SDK needs"
+      system_prompt_variant:
+        required: true
+        type: string
+        description: "key into system_prompts.json (general | security | strict | ...) -- the independent variable this vector tests. Resolved by the caller from the SYSTEM_PROMPT_VARIANT repo variable, see ../README.md."
+    secrets:
+      api_key:
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  review-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          allow-unsafe-pr-checkout: true
+          # Don't leave the write-scoped token in .git/config next to untrusted PR code.
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install ${{ inputs.pip_packages }}
+
+      - name: Run review and merge
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          API_KEY: ${{ secrets.api_key }}
+          SYSTEM_PROMPT_VARIANT: ${{ inputs.system_prompt_variant }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python .github/scripts/pr_review.py

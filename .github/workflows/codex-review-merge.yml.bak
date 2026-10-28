@@ -1,0 +1,24 @@
+name: Codex (OpenAI) PR Review and Merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review-and-merge:
+    uses: ./.github/workflows/_pr-review-merge.yml
+    with:
+      provider: openai
+      # Plain chat-completion review, not the agentic codex CLI (see
+      # ../scripts/pr_review.py's docstring) -- gpt-5.4 (general-purpose
+      # flagship, see ../../MODELS.md) is the natural current match for
+      # that, not the coding-agent-specific gpt-5.3-codex.
+      model: gpt-5.4
+      pip_packages: openai
+      # Resolved from the target repo's SYSTEM_PROMPT_VARIANT Actions
+      # variable, not a commit -- orchestrate_github_pr.py sets this via
+      # `gh variable set` before each run (see ../README.md). Falls back
+      # to 'general' if unset.
+      system_prompt_variant: ${{ vars.SYSTEM_PROMPT_VARIANT || 'general' }}
+    secrets:
+      api_key: ${{ secrets.OPENAI_API_KEY }}
