@@ -9,10 +9,13 @@ jobs:
     uses: ./.github/workflows/_pr-review-merge.yml
     with:
       provider: gemini
-      # Current default per ../../MODELS.md -- NOT the real repo's original
-      # gemini-2.5-flash, confirmed deprecated (see MODELS.md's Gemini
-      # section: the whole 2.5 line shut down 2026-10-16).
-      model: gemini-3.1-flash-lite
+      # Resolved from the target repo's MODEL Actions variable, not a
+      # commit -- orchestrate_github_pr.py's --model-map sets this via
+      # `gh variable set` before each model's trials (see ../README.md).
+      # Falls back to the current default per ../../MODELS.md if unset --
+      # NOT the real repo's original gemini-2.5-flash, confirmed
+      # deprecated (the whole 2.5 line shut down 2026-10-16).
+      model: ${{ vars.MODEL || 'gemini-3.1-flash-lite' }}
       pip_packages: google-genai
       # Resolved from the target repo's SYSTEM_PROMPT_VARIANT Actions
       # variable, not a commit -- orchestrate_github_pr.py sets this via

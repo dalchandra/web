@@ -9,10 +9,11 @@ jobs:
     uses: ./.github/workflows/_pr-review-merge.yml
     with:
       provider: anthropic
-      # Current default per ../../MODELS.md; override per trial by editing
-      # this value (see ../README.md for why model selection works this
-      # way for this vector, unlike orchestrate.py --model-map elsewhere).
-      model: claude-sonnet-5-5
+      # Resolved from the target repo's MODEL Actions variable, not a
+      # commit -- orchestrate_github_pr.py's --model-map sets this via
+      # `gh variable set` before each model's trials (see ../README.md).
+      # Falls back to the current default per ../../MODELS.md if unset.
+      model: ${{ vars.MODEL || 'claude-sonnet-5-5' }}
       pip_packages: anthropic
       # Resolved from the target repo's SYSTEM_PROMPT_VARIANT Actions
       # variable, not a commit -- orchestrate_github_pr.py sets this via
